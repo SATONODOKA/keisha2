@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,8 +8,9 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { ChevronDown, Plus, X, Users, UserPlus } from 'lucide-react';
+import { ChevronDown, Plus, X, Users, UserPlus, History, Clock } from 'lucide-react';
 import { toast } from 'sonner';
+import { getGroupHistory, saveGroupHistory, type GroupHistory } from '@/lib/storage';
 
 export default function NewGroupPage() {
   const router = useRouter();
@@ -25,6 +26,15 @@ export default function NewGroupPage() {
   const [newMemberName, setNewMemberName] = useState('');
   const [newMembers, setNewMembers] = useState<string[]>([]);
   const [isAddingMembers, setIsAddingMembers] = useState(false);
+
+  // 最近のグループ
+  const [recentGroups, setRecentGroups] = useState<GroupHistory[]>([]);
+
+  useEffect(() => {
+    // 最近のグループを取得
+    const history = getGroupHistory();
+    setRecentGroups(history);
+  }, []);
 
   const addMember = () => {
     if (!memberName.trim()) return;
@@ -96,6 +106,10 @@ export default function NewGroupPage() {
       }
       
       const { key } = await response.json();
+      
+      // グループ履歴を保存
+      saveGroupHistory(key, groupName.trim(), members.length);
+      
       toast.success('グループを作成しました！');
       router.push(`/group/${key}/share`);
     } catch (error) {
@@ -134,6 +148,10 @@ export default function NewGroupPage() {
       }
       
       const result = await response.json();
+      
+      // グループ履歴を更新
+      saveGroupHistory(groupKey.trim(), `グループ (${groupKey.slice(0, 6)}...)`, result.added);
+      
       toast.success(`${result.added}人のメンバーを追加しました！`);
       setGroupKey('');
       setNewMembers([]);
@@ -146,12 +164,50 @@ export default function NewGroupPage() {
     }
   };
 
+  const handleGroupClick = (groupId: string) => {
+    router.push(`/group/${groupId}`);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
       <div className="w-full max-w-md space-y-6">
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900">Walica</h1>
         </div>
+
+        {/* 最近のグループ */}
+        {recentGroups.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-5 w-5" />
+                最近のグループ
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {recentGroups.slice(0, 3).map((group) => (
+                  <div 
+                    key={group.id}
+                    onClick={() => handleGroupClick(group.id)}
+                    className="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
+                  >
+                    <div>
+                      <div className="font-medium">{group.name}</div>
+                      <div className="text-sm text-gray-500">
+                        {group.memberCount}人のメンバー
+                      </div>
+                    </div>
+                    <div className="text-xs text-gray-400">
+                      <Clock className="h-3 w-3 inline mr-1" />
+                      {new Date(group.lastAccessed).toLocaleDateString()}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Tabs defaultValue="create" className="w-full">
           <TabsList className="grid w-full grid-cols-2">

@@ -11,6 +11,7 @@ import { CopyButton } from '@/components/CopyButton';
 import { Plus, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { yen } from '@/lib/format';
+import { saveGroupHistory } from '@/lib/storage';
 
 interface Member {
   id: string;
@@ -51,6 +52,7 @@ export default function GroupPage() {
   const [summary, setSummary] = useState<Summary | null>(null);
   const [unit, setUnit] = useState<1 | 10 | 100 | 1000>(1);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   const groupKey = params.key as string;
 
@@ -67,11 +69,7 @@ export default function GroupPage() {
       setMembers(membersData);
       
       // グループ名を仮設定（実際はAPIで取得する必要あり）
-      const groupResponse = await fetch(`/api/groups/${groupKey}`);
-      if (groupResponse.ok) {
-        const groupData = await groupResponse.json();
-        setGroupName(groupData.name);
-      }
+      setGroupName('グループ');
 
       // 立替履歴取得
       const expensesResponse = await fetch(`/api/groups/${groupKey}/expenses`);
@@ -82,6 +80,9 @@ export default function GroupPage() {
 
       // 清算サマリー取得
       await fetchSummary();
+      
+      // グループ履歴を保存
+      saveGroupHistory(groupKey, 'グループ', membersData.length);
     } catch (error) {
       console.error('データ取得エラー:', error);
       toast.error('データの読み込みに失敗しました');
@@ -92,6 +93,7 @@ export default function GroupPage() {
 
   const fetchSummary = async (roundingUnit = unit) => {
     try {
+      setIsUpdating(true);
       const response = await fetch(`/api/groups/${groupKey}/summary?unit=${roundingUnit}`);
       if (response.ok) {
         const data = await response.json();
@@ -99,6 +101,8 @@ export default function GroupPage() {
       }
     } catch (error) {
       console.error('サマリー取得エラー:', error);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -108,10 +112,27 @@ export default function GroupPage() {
     }
   }, [groupKey]);
 
-  const handleUnitChange = (value: string) => {
+  const handleUnitChange = async (value: string) => {
     const newUnit = Number(value) as 1 | 10 | 100 | 1000;
+    
+    // 即座にUIを更新
     setUnit(newUnit);
-    fetchSummary(newUnit);
+    
+    // 既存のサマリーがある場合は即座に再計算して表示
+    if (summary) {
+      const recalculatedSummary = {
+        ...summary,
+        roundingUnit: newUnit,
+        settlements: summary.settlements.map(s => ({
+          ...s,
+          amount: Math.round(s.amount / newUnit) * newUnit
+        }))
+      };
+      setSummary(recalculatedSummary);
+    }
+    
+    // APIから最新データを取得
+    await fetchSummary(newUnit);
   };
 
   if (isLoading) {
@@ -155,10 +176,15 @@ export default function GroupPage() {
             <Card>
               <CardHeader>
                 <div className="flex justify-between items-center">
-                  <CardTitle>清算方法</CardTitle>
+                  <CardTitle className="flex items-center gap-2">
+                    清算方法
+                    {isUpdating && (
+                      <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
+                    )}
+                  </CardTitle>
                   {summary && (
                     <div className="flex items-center gap-2">
-                      <Select value={unit.toString()} onValueChange={handleUnitChange}>
+                      <Select value={unit.toString()} onValueChange={handleUnitChange} disabled={isUpdating}>
                         <SelectTrigger className="w-32">
                           <SelectValue />
                         </SelectTrigger>
