@@ -38,19 +38,14 @@ export function greedySettle(nets: Net[], unit: 1|10|100|1000) {
     if (n.net === 0) j++;
   }
 
-  // 丸め：各トランザクション金額をunitに丸め、総和誤差は最大額の取引で吸収
+  // 丸め：立て替えた人に多めに払う原則（切り上げ）
   if (unit > 1 && tx.length) {
-    const rounded = tx.map(t => ({ ...t, amount: roundToUnit(t.amount, unit) }));
-    const sumOrig = tx.reduce((s,t)=>s+t.amount,0);
-    const sumRnd  = rounded.reduce((s,t)=>s+t.amount,0);
-    const diff = sumOrig - sumRnd; // 正なら足りない
-    if (diff !== 0) {
-      // 最大額の取引に差分をのせる（unitの倍数に保つ）
-      let k = 0;
-      for (let idx=1; idx<rounded.length; idx++)
-        if (rounded[idx].amount > rounded[k].amount) k = idx;
-      rounded[k].amount += diff;
-    }
+    // 各トランザクションをunitの倍数に切り上げ
+    const rounded = tx.map(t => {
+      const roundedAmount = Math.ceil(t.amount / unit) * unit;
+      return { ...t, amount: roundedAmount };
+    });
+    
     return rounded.filter(t => t.amount !== 0);
   }
 
