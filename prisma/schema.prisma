@@ -1,0 +1,52 @@
+datasource db {
+  provider = "sqlite"
+  url = "file:./dev.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Group {
+  id            String   @id @default(cuid())
+  key           String   @unique         // URLキー（12〜16文字の英数記号なし）
+  name          String
+  roundingUnit  Int      @default(1)    // 1 | 10 | 100 | 1000
+  members       Member[]
+  expenses      Expense[]
+  createdAt     DateTime @default(now())
+}
+
+model Member {
+  id        String   @id @default(cuid())
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id])
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  
+  // リレーションシップの逆参照
+  paidExpenses Expense[] @relation("PaidByMember")
+  beneficiaries Beneficiary[]
+}
+
+model Expense {
+  id        String   @id @default(cuid())
+  groupId   String
+  group     Group    @relation(fields: [groupId], references: [id])
+  title     String
+  amountYen Int      // 円単位の整数（内部は常に整数）
+  paidById  String
+  paidBy    Member   @relation("PaidByMember", fields: [paidById], references: [id])
+  items     Beneficiary[]
+  createdAt DateTime @default(now())
+}
+
+model Beneficiary {
+  expenseId String
+  expense   Expense  @relation(fields: [expenseId], references: [id])
+  memberId  String
+  member    Member   @relation(fields: [memberId], references: [id])
+
+  @@id([expenseId, memberId])
+}
