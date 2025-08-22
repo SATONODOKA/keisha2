@@ -7,7 +7,10 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
+import EqualAdjuster from '@/components/EqualAdjuster';
 
 interface Member {
   id: string;
@@ -22,8 +25,10 @@ export default function NewPaymentPage() {
   const [title, setTitle] = useState('');
   const [amount, setAmount] = useState('');
   const [beneficiaryIds, setBeneficiaryIds] = useState<string[]>([]);
+  const [allocations, setAllocations] = useState<Record<string, number>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isOpen, setIsOpen] = useState(false);
 
   const groupKey = params.key as string;
 
@@ -59,6 +64,15 @@ export default function NewPaymentPage() {
     }
   };
 
+  const handleAllocationChange = (alloc: Record<string, number>) => {
+    setAllocations(alloc);
+  };
+
+  // 負担者リスト（Memberオブジェクト）
+  const beneficiaries = members.filter(m => beneficiaryIds.includes(m.id));
+  // 総額が入力され、負担者が選択されている場合のみEqualAdjusterを表示
+  const showEqualAdjuster = amount && beneficiaryIds.length > 0;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -85,6 +99,14 @@ export default function NewPaymentPage() {
     setIsSubmitting(true);
     
     try {
+      // allocationsがある場合、配列形式に変換
+      const allocationsArray = Object.keys(allocations).length > 0 
+        ? Object.entries(allocations).map(([memberId, amountYen]) => ({
+            memberId,
+            amountYen
+          }))
+        : undefined;
+
       const response = await fetch(`/api/groups/${groupKey}/expenses`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -92,7 +114,8 @@ export default function NewPaymentPage() {
           title: title.trim(),
           amount: Number(amount),
           paidById,
-          beneficiaryIds
+          beneficiaryIds,
+          allocations: allocationsArray
         }),
       });
       
@@ -101,7 +124,7 @@ export default function NewPaymentPage() {
         throw new Error(error.error || '立替記録に失敗しました');
       }
       
-      toast.success('立替記録を追加しました');
+      toast.success('立替記録を追加しました！');
       router.push(`/group/${groupKey}`);
     } catch (error) {
       console.error('立替記録エラー:', error);
@@ -194,6 +217,30 @@ export default function NewPaymentPage() {
                   ))}
                 </div>
               </div>
+
+              {/* 傾斜調整UI */}
+              {showEqualAdjuster && (
+                <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+                  <CollapsibleTrigger asChild>
+                    <Button variant="outline" className="w-full">
+                      傾斜調整（均等割り戻し）
+                      <ChevronDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </CollapsibleTrigger>
+                  <CollapsibleContent className="mt-3">
+                    <div className="rounded-lg border p-4">
+                      <h4 className="text-sm font-medium text-gray-700 mb-3">
+                        各人の負担額を調整
+                      </h4>
+                      <EqualAdjuster
+                        totalYen={Number(amount)}
+                        people={beneficiaries}
+                        onChange={handleAllocationChange}
+                      />
+                    </div>
+                  </CollapsibleContent>
+                </Collapsible>
+              )}
 
               <Button type="submit" className="w-full" disabled={isSubmitting}>
                 {isSubmitting ? '登録中...' : '登録'}

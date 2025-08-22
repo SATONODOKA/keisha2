@@ -20,7 +20,8 @@ export async function GET(
         expenses: {
           include: {
             paidBy: true,
-            items: { include: { member: true } }
+            items: { include: { member: true } },
+            allocations: { include: { member: true } }
           }
         }
       }
@@ -32,17 +33,39 @@ export async function GET(
 
     // 純額計算
     const members = group.members.map(m => ({ id: m.id, name: m.name }));
-    const expenses = group.expenses.map(e => ({
-      amountYen: e.amountYen,
-      paidById: e.paidById,
-      items: e.items.map(i => ({ memberId: i.memberId }))
-    }));
+    const nets = new Map<string, number>();
 
-    const nets = calcNets(members, expenses);
-    // URLパラメータのunitを使って清算を計算
-    const settlements = greedySettle(nets, unit);
+    // 初期化
+    members.forEach(m => nets.set(m.id, 0));
 
-    // コピー用テキスト生成（URLパラメータのunitを使う）
+    for (const expense of group.expenses) {
+      // 支払者はプラス
+      nets.set(expense.paidById, (nets.get(expense.paidById) ?? 0) + expense.amountYen);
+
+      // ExpenseAllocationがある場合は優先使用
+      if (expense.allocations && expense.allocations.length > 0) {
+        // 配分された金額で各メンバーにマイナス
+        for (const alloc of expense.allocations) {
+          nets.set(alloc.memberId, (nets.get(alloc.memberId) ?? 0) - alloc.amountYen);
+        }
+      } else {
+        // 従来の均等割り
+        const k = expense.items.length;
+        const share = Math.floor(expense.amountYen / k);
+        let rem = expense.amountYen - share * k;
+        expense.items.forEach((it, i) => {
+          const extra = rem > 0 ? 1 : 0; rem -= extra;
+          nets.set(it.memberId, (nets.get(it.memberId) ?? 0) - (share + extra));
+        });
+      }
+    }
+
+    // Mapを配列に変換
+    const netArray = members.map(m => ({ memberId: m.id, name: m.name, net: nets.get(m.id) ?? 0 }));
+
+    const settlements = greedySettle(netArray, unit);
+
+    // コピー用テキスト生成
     const settlementText = settlements.length > 0
       ? `清算方法（丸め単位：¥${unit}）
 ${settlements.map(s => `${s.from} → ${s.to}：${yen(s.amount)}`).join('\n')}
@@ -51,10 +74,9 @@ ${settlements.map(s => `${s.from} → ${s.to}：${yen(s.amount)}`).join('\n')}
 
     return NextResponse.json({
       members: group.members.map(m => ({ id: m.id, name: m.name })),
-      nets,
+      nets: netArray,
       settlements,
       settlementText,
-      // URLパラメータのunitを返す（データベースの値ではなく）
       roundingUnit: unit
     });
   } catch (error) {

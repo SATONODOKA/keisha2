@@ -28,6 +28,7 @@ model Member {
   // リレーションシップの逆参照
   paidExpenses Expense[] @relation("PaidByMember")
   beneficiaries Beneficiary[]
+  allocations ExpenseAllocation[]
 }
 
 model Expense {
@@ -39,6 +40,7 @@ model Expense {
   paidById  String
   paidBy    Member   @relation("PaidByMember", fields: [paidById], references: [id])
   items     Beneficiary[]
+  allocations ExpenseAllocation[]
   createdAt DateTime @default(now())
 }
 
@@ -49,4 +51,15 @@ model Beneficiary {
   member    Member   @relation(fields: [memberId], references: [id])
 
   @@id([expenseId, memberId])
+}
+
+model ExpenseAllocation {
+  id         String  @id @default(cuid())
+  expenseId  String
+  expense    Expense @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+  memberId   String
+  member     Member  @relation(fields: [memberId], references: [id])
+  amountYen  Int
+
+  @@unique([expenseId, memberId])
 }

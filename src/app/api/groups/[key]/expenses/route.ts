@@ -8,7 +8,7 @@ export async function POST(
 ) {
   try {
     const { key } = await params;
-    const { title, amount, paidById, beneficiaryIds } = await request.json();
+    const { title, amount, paidById, beneficiaryIds, allocations } = await request.json();
 
     if (!title || !amount || !paidById || !beneficiaryIds || beneficiaryIds.length === 0) {
       return NextResponse.json({ error: '全ての項目を入力してください' }, { status: 400 });
@@ -56,6 +56,42 @@ export async function POST(
         memberId
       }))
     });
+
+    // allocationsがある場合、ExpenseAllocationに保存
+    if (allocations && Array.isArray(allocations) && allocations.length > 0) {
+      // 合計金額の検証
+      const totalAlloc = allocations.reduce((sum: number, alloc: any) => sum + alloc.amountYen, 0);
+      if (totalAlloc !== amountYen) {
+        return NextResponse.json({
+          error: `配分金額の合計（${totalAlloc.toLocaleString()}円）が総額（${amountYen.toLocaleString()}円）と一致しません`
+        }, { status: 400 });
+      }
+
+      // 全てのmemberIdがbeneficiaryIdsに含まれているかチェック
+      for (const alloc of allocations) {
+        if (!beneficiaryIds.includes(alloc.memberId)) {
+          return NextResponse.json({
+            error: `配分に含まれているメンバー（${alloc.memberId}）が負担者に含まれていません`
+          }, { status: 400 });
+        }
+      }
+
+      // ExpenseAllocationに保存（個別作成でエラーハンドリング）
+      try {
+        for (const alloc of allocations) {
+          await prisma.expenseAllocation.create({
+            data: {
+              expenseId: expense.id,
+              memberId: alloc.memberId,
+              amountYen: alloc.amountYen
+            }
+          });
+        }
+      } catch (allocError) {
+        console.error('配分保存エラー:', allocError);
+        return NextResponse.json({ error: '配分の保存に失敗しました' }, { status: 500 });
+      }
+    }
 
     return NextResponse.json({ success: true }, { status: 201 });
   } catch (error) {
