@@ -31,11 +31,13 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // メンバー作成
+    // メンバー作成（名前だけの場合は後方互換性維持）
     await prisma.member.createMany({
-      data: members.map((memberName: string) => ({
+      data: members.map((member: any) => ({
         groupId: group.id,
-        name: memberName
+        name: typeof member === 'string' ? member : member.name,
+        role: typeof member === 'string' ? 'MEMBER' : (member.role || 'MEMBER'),
+        age: typeof member === 'string' ? null : member.age
       }))
     });
 

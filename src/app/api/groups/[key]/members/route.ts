@@ -16,7 +16,13 @@ export async function GET(
       return NextResponse.json({ error: 'グループが見つかりません' }, { status: 404 });
     }
 
-    return NextResponse.json(group.members.map(m => ({ id: m.id, name: m.name, isActive: m.isActive })));
+    return NextResponse.json(group.members.map(m => ({ 
+      id: m.id, 
+      name: m.name, 
+      isActive: m.isActive,
+      role: m.role,
+      age: m.age 
+    })));
   } catch (error) {
     console.error('メンバー取得エラー:', error);
     return NextResponse.json({ error: 'メンバーの取得に失敗しました' }, { status: 500 });
@@ -47,19 +53,21 @@ export async function POST(
 
     // 重複メンバーのチェック
     const existingMemberNames = group.members.map(m => m.name);
-    const duplicateMembers = members.filter((name: string) => existingMemberNames.includes(name));
+    const duplicateMembers = members.filter((member: any) => existingMemberNames.includes(member.name));
 
     if (duplicateMembers.length > 0) {
       return NextResponse.json({ 
-        error: `以下のメンバーは既に存在します: ${duplicateMembers.join(', ')}` 
+        error: `以下のメンバーは既に存在します: ${duplicateMembers.map(m => m.name).join(', ')}` 
       }, { status: 400 });
     }
 
     // 新しいメンバーを追加
     const newMembers = await prisma.member.createMany({
-      data: members.map((name: string) => ({
+      data: members.map((member: any) => ({
         groupId: group.id,
-        name: name.trim()
+        name: member.name.trim(),
+        role: member.role || 'MEMBER',
+        age: member.age || null
       }))
     });
 
