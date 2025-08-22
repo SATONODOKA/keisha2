@@ -98,6 +98,8 @@ export default function GroupPage() {
       if (response.ok) {
         const data = await response.json();
         setSummary(data);
+        // APIレスポンスから正しいunit値を設定
+        setUnit(data.roundingUnit);
       }
     } catch (error) {
       console.error('サマリー取得エラー:', error);
@@ -115,23 +117,10 @@ export default function GroupPage() {
   const handleUnitChange = async (value: string) => {
     const newUnit = Number(value) as 1 | 10 | 100 | 1000;
     
-    // 即座にUIを更新
+    // 即座にUIのunitを更新
     setUnit(newUnit);
     
-    // 既存のサマリーがある場合は即座に再計算して表示
-    if (summary) {
-      const recalculatedSummary = {
-        ...summary,
-        roundingUnit: newUnit,
-        settlements: summary.settlements.map(s => ({
-          ...s,
-          amount: Math.round(s.amount / newUnit) * newUnit
-        }))
-      };
-      setSummary(recalculatedSummary);
-    }
-    
-    // APIから最新データを取得
+    // APIから新しいunitで計算されたデータを取得
     await fetchSummary(newUnit);
   };
 

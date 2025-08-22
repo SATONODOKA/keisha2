@@ -39,11 +39,12 @@ export async function GET(
     }));
 
     const nets = calcNets(members, expenses);
-    const settlements = greedySettle(nets, group.roundingUnit);
+    // URLパラメータのunitを使って清算を計算
+    const settlements = greedySettle(nets, unit);
 
-    // コピー用テキスト生成
+    // コピー用テキスト生成（URLパラメータのunitを使う）
     const settlementText = settlements.length > 0
-      ? `清算方法（丸め単位：¥${group.roundingUnit}）
+      ? `清算方法（丸め単位：¥${unit}）
 ${settlements.map(s => `${s.from} → ${s.to}：${yen(s.amount)}`).join('\n')}
 （合計受取＝合計支払＝${yen(settlements.reduce((sum, s) => sum + s.amount, 0))}）`
       : '清算の必要はありません';
@@ -53,7 +54,8 @@ ${settlements.map(s => `${s.from} → ${s.to}：${yen(s.amount)}`).join('\n')}
       nets,
       settlements,
       settlementText,
-      roundingUnit: group.roundingUnit
+      // URLパラメータのunitを返す（データベースの値ではなく）
+      roundingUnit: unit
     });
   } catch (error) {
     console.error('清算サマリー取得エラー:', error);
