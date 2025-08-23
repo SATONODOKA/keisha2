@@ -213,22 +213,7 @@ export default function GroupPage() {
                   <p className="text-gray-500">清算の必要はありません</p>
                 )}
 
-                {/* 現在の残高表示 */}
-                {summary && summary.nets.length > 0 && (
-                  <div className="mt-4 pt-4 border-t">
-                    <h4 className="text-sm font-medium mb-2">現在の残高</h4>
-                    <div className="space-y-2">
-                      {summary.nets.map((netItem) => (
-                        <div key={netItem.memberId} className="flex items-center justify-between text-sm">
-                          <span>{netItem.name}</span>
-                          <span className={`font-mono ${netItem.net > 0 ? 'text-green-600' : netItem.net < 0 ? 'text-red-600' : 'text-gray-600'}`}>
-                            {netItem.net > 0 ? '+' : ''}{yen(netItem.net)}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
+
 
                 {/* 傾斜をかけるボタン */}
                 {summary && (
@@ -266,9 +251,27 @@ export default function GroupPage() {
           <h2 className="text-xl font-bold mb-4">立替履歴</h2>
           {expenses.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2">
-              {expenses.map((expense) => (
-                <ExpenseCard key={expense.id} expense={expense} />
-              ))}
+              {expenses.map((expense) => {
+                // membersByIdを作成（各立替カードで清算表示に使用）
+                const membersById = members.reduce((acc, member) => {
+                  acc[member.id] = { 
+                    id: member.id, 
+                    name: member.name, 
+                    role: member.role, 
+                    age: member.age 
+                  };
+                  return acc;
+                }, {} as Record<string, { id: string; name: string; role?: string; age?: number | null }>);
+                
+                return (
+                  <ExpenseCard 
+                    key={expense.id} 
+                    expense={expense} 
+                    membersById={membersById}
+                    roundingUnit={unit}
+                  />
+                );
+              })}
             </div>
           ) : (
             <Card>
