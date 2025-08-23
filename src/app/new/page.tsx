@@ -12,11 +12,19 @@ import { ChevronDown, Plus, X, Users, UserPlus, History, Clock } from 'lucide-re
 import { toast } from 'sonner';
 import { getGroupHistory, saveGroupHistory, type GroupHistory } from '@/lib/storage';
 
+interface MemberData {
+  name: string;
+  role?: string;
+  age?: number;
+}
+
 export default function NewGroupPage() {
   const router = useRouter();
   const [groupName, setGroupName] = useState('');
   const [memberName, setMemberName] = useState('');
-  const [members, setMembers] = useState<string[]>([]);
+  const [memberRole, setMemberRole] = useState<string>('MEMBER');
+  const [memberAge, setMemberAge] = useState<string>('');
+  const [members, setMembers] = useState<MemberData[]>([]);
   const [roundingUnit, setRoundingUnit] = useState<1 | 10 | 100 | 1000>(1);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -24,7 +32,9 @@ export default function NewGroupPage() {
   // メンバー追加用
   const [groupKey, setGroupKey] = useState('');
   const [newMemberName, setNewMemberName] = useState('');
-  const [newMembers, setNewMembers] = useState<string[]>([]);
+  const [newMemberRole, setNewMemberRole] = useState<string>('MEMBER');
+  const [newMemberAge, setNewMemberAge] = useState<string>('');
+  const [newMembers, setNewMembers] = useState<MemberData[]>([]);
   const [isAddingMembers, setIsAddingMembers] = useState(false);
 
   // 最近のグループ
@@ -38,12 +48,21 @@ export default function NewGroupPage() {
 
   const addMember = () => {
     if (!memberName.trim()) return;
-    if (members.includes(memberName.trim())) {
+    if (members.some(m => m.name === memberName.trim())) {
       toast.error('同じ名前のメンバーは追加できません');
       return;
     }
-    setMembers([...members, memberName.trim()]);
+
+    const memberData: MemberData = {
+      name: memberName.trim(),
+      role: memberRole !== 'MEMBER' ? memberRole : undefined,
+      age: memberAge ? parseInt(memberAge) : undefined,
+    };
+
+    setMembers([...members, memberData]);
     setMemberName('');
+    setMemberRole('MEMBER');
+    setMemberAge('');
   };
 
   const removeMember = (index: number) => {
@@ -52,12 +71,21 @@ export default function NewGroupPage() {
 
   const addNewMember = () => {
     if (!newMemberName.trim()) return;
-    if (newMembers.includes(newMemberName.trim())) {
+    if (newMembers.some(m => m.name === newMemberName.trim())) {
       toast.error('同じ名前のメンバーは追加できません');
       return;
     }
-    setNewMembers([...newMembers, newMemberName.trim()]);
+
+    const memberData: MemberData = {
+      name: newMemberName.trim(),
+      role: newMemberRole !== 'MEMBER' ? newMemberRole : undefined,
+      age: newMemberAge ? parseInt(newMemberAge) : undefined,
+    };
+
+    setNewMembers([...newMembers, memberData]);
     setNewMemberName('');
+    setNewMemberRole('MEMBER');
+    setNewMemberAge('');
   };
 
   const removeNewMember = (index: number) => {
@@ -164,8 +192,26 @@ export default function NewGroupPage() {
     }
   };
 
-  const handleGroupClick = (groupId: string) => {
-    router.push(`/group/${groupId}`);
+  const getRoleDisplayName = (role: string) => {
+    const roleNames: Record<string, string> = {
+      'EXEC': '役員',
+      'MANAGER': '部長/課長',
+      'SENIOR': '主任/リーダー',
+      'MEMBER': '一般',
+      'JUNIOR': '新人/インターン',
+    };
+    return roleNames[role] || role;
+  };
+
+  const getRoleAbbr = (role: string) => {
+    const roleAbbrs: Record<string, string> = {
+      'EXEC': '役',
+      'MANAGER': '部課',
+      'SENIOR': '主リ',
+      'MEMBER': '般',
+      'JUNIOR': '新イ',
+    };
+    return roleAbbrs[role] || role;
   };
 
   return (
@@ -174,40 +220,6 @@ export default function NewGroupPage() {
         <div className="text-center">
           <h1 className="text-3xl font-bold text-gray-900">Walica</h1>
         </div>
-
-        {/* 最近のグループ */}
-        {recentGroups.length > 0 && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <History className="h-5 w-5" />
-                最近のグループ
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                {recentGroups.slice(0, 3).map((group) => (
-                  <div 
-                    key={group.id}
-                    onClick={() => handleGroupClick(group.id)}
-                    className="flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg cursor-pointer transition-colors"
-                  >
-                    <div>
-                      <div className="font-medium">{group.name}</div>
-                      <div className="text-sm text-gray-500">
-                        {group.memberCount}人のメンバー
-                      </div>
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      <Clock className="h-3 w-3 inline mr-1" />
-                      {new Date(group.lastAccessed).toLocaleDateString()}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        )}
 
         <Tabs defaultValue="create" className="w-full">
           <TabsList className="grid w-full grid-cols-2">
@@ -257,36 +269,89 @@ export default function NewGroupPage() {
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
-                    
-                    {members.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {members.map((member, index) => (
-                          <div key={index} className="flex items-center justify-between bg-gray-100 px-3 py-2 rounded">
-                            <span>{member}</span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeMember(index)}
-                              className="h-6 w-6 p-0"
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ))}
+
+                    {/* 役職・年齢選択UI */}
+                    <div className="mt-2 space-y-2 p-3 bg-gray-50 rounded-md">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            役職（任意）
+                          </label>
+                          <Select value={memberRole} onValueChange={setMemberRole}>
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="EXEC">役員</SelectItem>
+                              <SelectItem value="MANAGER">部長/課長</SelectItem>
+                              <SelectItem value="SENIOR">主任/リーダー</SelectItem>
+                              <SelectItem value="MEMBER">一般</SelectItem>
+                              <SelectItem value="JUNIOR">新人/インターン</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            年齢（任意）
+                          </label>
+                          <Input
+                            type="number"
+                            placeholder="例：30"
+                            value={memberAge}
+                            onChange={(e) => setMemberAge(e.target.value)}
+                            min="0"
+                            max="120"
+                            className="h-8 text-xs"
+                          />
+                        </div>
                       </div>
-                    )}
+                    </div>
                   </div>
+
+                  {/* 追加されたメンバーの表示 */}
+                  {members.length > 0 && (
+                    <div className="space-y-2">
+                      {members.map((member, index) => (
+                        <div key={index} className="flex items-center justify-between p-2 bg-white rounded border">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{member.name}</span>
+                            {(member.role && member.role !== 'MEMBER') || member.age ? (
+                              <div className="flex items-center gap-1 text-xs text-gray-500">
+                                {member.role && member.role !== 'MEMBER' && (
+                                  <span className="bg-blue-100 text-blue-800 px-1 py-0.5 rounded">
+                                    {getRoleAbbr(member.role)}
+                                  </span>
+                                )}
+                                {member.age && (
+                                  <span className="bg-green-100 text-green-800 px-1 py-0.5 rounded">
+                                    {member.age}歳
+                                  </span>
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+                          <Button
+                            type="button"
+                            onClick={() => removeMember(index)}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   <Collapsible open={isOpen} onOpenChange={setIsOpen}>
                     <CollapsibleTrigger asChild>
-                      <Button variant="outline" className="w-full">
+                      <Button type="button" variant="outline" className="w-full">
+                        <ChevronDown className="h-4 w-4 mr-2" />
                         丸め単位設定
-                        <ChevronDown className="ml-2 h-4 w-4" />
                       </Button>
                     </CollapsibleTrigger>
                     <CollapsibleContent className="mt-2">
-                      <Select value={roundingUnit.toString()} onValueChange={(value) => setRoundingUnit(Number(value) as 1 | 10 | 100 | 1000)}>
+                      <Select value={roundingUnit.toString()} onValueChange={(value) => setRoundingUnit(parseInt(value) as 1 | 10 | 100 | 1000)}>
                         <SelectTrigger>
                           <SelectValue />
                         </SelectTrigger>
@@ -321,14 +386,11 @@ export default function NewGroupPage() {
                     </label>
                     <Input
                       type="text"
-                      placeholder="例：RHTKUXR32"
+                      placeholder="例：ABC123XYZ"
                       value={groupKey}
                       onChange={(e) => setGroupKey(e.target.value)}
                       required
                     />
-                    <p className="text-xs text-gray-500 mt-1">
-                      共有されたグループキーを入力してください
-                    </p>
                   </div>
 
                   <div>
@@ -338,7 +400,7 @@ export default function NewGroupPage() {
                     <div className="flex gap-2">
                       <Input
                         type="text"
-                        placeholder="例：佐藤"
+                        placeholder="例：田中"
                         value={newMemberName}
                         onChange={(e) => setNewMemberName(e.target.value)}
                         onKeyPress={handleNewMemberKeyPress}
@@ -347,26 +409,79 @@ export default function NewGroupPage() {
                         <Plus className="h-4 w-4" />
                       </Button>
                     </div>
-                    
-                    {newMembers.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {newMembers.map((member, index) => (
-                          <div key={index} className="flex items-center justify-between bg-green-100 px-3 py-2 rounded">
-                            <span>{member}</span>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => removeNewMember(index)}
-                              className="h-6 w-6 p-0"
-                            >
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ))}
+
+                    {/* 役職・年齢選択UI */}
+                    <div className="mt-2 space-y-2 p-3 bg-gray-50 rounded-md">
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            役職（任意）
+                          </label>
+                          <Select value={newMemberRole} onValueChange={setNewMemberRole}>
+                            <SelectTrigger className="h-8 text-xs">
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="EXEC">役員</SelectItem>
+                              <SelectItem value="MANAGER">部長/課長</SelectItem>
+                              <SelectItem value="SENIOR">主任/リーダー</SelectItem>
+                              <SelectItem value="MEMBER">一般</SelectItem>
+                              <SelectItem value="JUNIOR">新人/インターン</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-600 mb-1">
+                            年齢（任意）
+                          </label>
+                          <Input
+                            type="number"
+                            placeholder="例：30"
+                            value={newMemberAge}
+                            onChange={(e) => setNewMemberAge(e.target.value)}
+                            min="0"
+                            max="120"
+                            className="h-8 text-xs"
+                          />
+                        </div>
                       </div>
-                    )}
+                    </div>
                   </div>
+
+                  {/* 追加されたメンバーの表示 */}
+                  {newMembers.length > 0 && (
+                    <div className="space-y-2">
+                      {newMembers.map((member, index) => (
+                        <div key={index} className="flex items-center justify-between p-2 bg-white rounded border">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{member.name}</span>
+                            {(member.role && member.role !== 'MEMBER') || member.age ? (
+                              <div className="flex items-center gap-1 text-xs text-gray-500">
+                                {member.role && member.role !== 'MEMBER' && (
+                                  <span className="bg-blue-100 text-blue-800 px-1 py-0.5 rounded">
+                                    {getRoleAbbr(member.role)}
+                                  </span>
+                                )}
+                                {member.age && (
+                                  <span className="bg-green-100 text-green-800 px-1 py-0.5 rounded">
+                                    {member.age}歳
+                                  </span>
+                                )}
+                              </div>
+                            ) : null}
+                          </div>
+                          <Button
+                            type="button"
+                            onClick={() => removeNewMember(index)}
+                            size="sm"
+                            variant="ghost"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   <Button type="submit" className="w-full" disabled={isAddingMembers}>
                     {isAddingMembers ? '追加中...' : 'メンバーを追加'}
@@ -376,6 +491,35 @@ export default function NewGroupPage() {
             </Card>
           </TabsContent>
         </Tabs>
+
+        {/* 最近のグループ */}
+        {recentGroups.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <History className="h-4 w-4" />
+                最近のグループ
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {recentGroups.slice(0, 5).map((group) => (
+                <div
+                  key={group.id}
+                  className="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm cursor-pointer hover:bg-gray-100 transition-colors"
+                  onClick={() => router.push(`/group/${group.id}`)}
+                >
+                  <div>
+                    <p className="font-medium text-gray-900">{group.name}</p>
+                    <p className="text-sm text-gray-500">
+                      {group.memberCount}人 • {new Date(group.lastAccessed).toLocaleDateString('ja-JP')}
+                    </p>
+                  </div>
+                  <Clock className="h-4 w-4 text-gray-400" />
+                </div>
+              ))}
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

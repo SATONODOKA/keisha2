@@ -2,14 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { generateGroupKey } from '@/lib/key';
 import { roundToUnit } from '@/lib/format';
+import { CreateGroupSchema, CreateMemberSchema } from '@/lib/validation';
 
 export async function POST(request: NextRequest) {
   try {
-    const { name, members, roundingUnit = 1 } = await request.json();
-
-    if (!name || !members || !Array.isArray(members) || members.length === 0) {
-      return NextResponse.json({ error: 'グループ名とメンバーは必須です' }, { status: 400 });
+    const body = await request.json();
+    const validatedData = CreateGroupSchema.safeParse(body);
+    
+    if (!validatedData.success) {
+      return NextResponse.json({ 
+        error: 'バリデーションエラー', 
+        details: validatedData.error.issues 
+      }, { status: 400 });
     }
+
+    const { name, members, roundingUnit } = validatedData.data;
 
     // グループキーの生成（重複チェック付き）
     let key: string;
@@ -31,12 +38,27 @@ export async function POST(request: NextRequest) {
       }
     });
 
-    // メンバー作成
+    // メンバー作成（role/age対応）
     await prisma.member.createMany({
-      data: members.map((memberName: string) => ({
-        groupId: group.id,
-        name: memberName
-      }))
+      data: members.map((member: any) => {
+        if (typeof member === 'string') {
+          // 後方互換：文字列の場合はnameのみ
+          return {
+            groupId: group.id,
+            name: member,
+            role: 'MEMBER',
+            age: null,
+          };
+        } else {
+          // オブジェクト形式の場合（role/ageを含む可能性あり）
+          return {
+            groupId: group.id,
+            name: member.name,
+            role: member.role ?? 'MEMBER',
+            age: member.age ?? null,
+          };
+        }
+      })
     });
 
     return NextResponse.json({ key }, { status: 201 });

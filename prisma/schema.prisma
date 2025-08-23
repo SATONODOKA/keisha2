@@ -7,6 +7,14 @@ generator client {
   provider = "prisma-client-js"
 }
 
+enum Role {
+  EXEC      // 役員
+  MANAGER   // 部長/課長
+  SENIOR    // 主任/リーダー
+  MEMBER    // 一般（既定）
+  JUNIOR    // 新人/インターン
+}
+
 model Group {
   id            String   @id @default(cuid())
   key           String   @unique         // URLキー（12〜16文字の英数記号なし）
@@ -23,6 +31,8 @@ model Member {
   group     Group    @relation(fields: [groupId], references: [id])
   name      String
   isActive  Boolean  @default(true)
+  role      Role     @default(MEMBER) // 追加：既存は自動で MEMBER
+  age       Int?                      // 追加：nullable（未入力可）
   createdAt DateTime @default(now())
   
   // リレーションシップの逆参照
