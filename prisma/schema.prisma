@@ -1,6 +1,6 @@
 datasource db {
   provider = "sqlite"
-  url = "file:./dev.db"
+  url = "file:/Users/satonodoka/Desktop/dev_absolute.db"
 }
 
 generator client {
