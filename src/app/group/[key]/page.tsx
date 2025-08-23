@@ -46,7 +46,6 @@ interface Summary {
   settlements: Settlement[];
   settlementText: string;
   roundingUnit: number;
-  tilt: string;
 }
 
 export default function GroupPage() {
