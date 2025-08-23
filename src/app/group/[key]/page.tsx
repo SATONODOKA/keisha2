@@ -1,7 +1,7 @@
 'use client';
 
 import { useParams, useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -12,6 +12,9 @@ import { Plus, Copy } from 'lucide-react';
 import { toast } from 'sonner';
 import { yen } from '@/lib/format';
 import { saveGroupHistory } from '@/lib/storage';
+import { computeGroupTransfers } from '@/lib/expenseSettlement';
+import { greedySettle } from '@/lib/settlement';
+import { useExpenseTiltStore } from '@/stores/expenseTiltStore';
 
 interface Member {
   id: string;
@@ -52,11 +55,63 @@ export default function GroupPage() {
   const [groupName, setGroupName] = useState('');
   const [members, setMembers] = useState<Member[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [summary, setSummary] = useState<Summary | null>(null);
   const [unit, setUnit] = useState<1 | 10 | 100 | 1000>(1);
-  const [tiltOn, setTiltOn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
-  const [isUpdating, setIsUpdating] = useState(false);
+  
+  // Zustandストアから傾斜モードを取得
+  const tiltMap = useExpenseTiltStore((s) => s.map);
+  const getTiltMode = useExpenseTiltStore((s) => s.get);
+  
+  // クライアントサイドで清算計算
+  const summary = useMemo(() => {
+    if (members.length === 0 || expenses.length === 0) return null;
+    
+    // メンバーID→メンバー情報のマップを作成
+    const membersById = Object.fromEntries(members.map(m => [m.id, m]));
+    
+    // 各立替の傾斜モードに応じて清算計算
+    const expenseData = expenses.map(e => ({
+      id: e.id,
+      amountYen: e.amountYen,
+      paidById: e.paidBy.id,
+      beneficiaries: e.beneficiaries.map(b => ({ memberId: b.id })),
+    }));
+    
+    const nets = computeGroupTransfers({
+      expenses: expenseData,
+      membersById,
+      roundingUnit: unit,
+      getTiltMode,
+    });
+    
+    // メンバーID→メンバー名のマップを作成
+    const memberNames = Object.fromEntries(members.map(m => [m.id, m.name]));
+    
+    // netsを配列形式に変換
+    const netsArray = Object.entries(nets).map(([memberId, net]) => ({
+      memberId,
+      name: memberNames[memberId],
+      net,
+    }));
+    
+    // Greedy清算
+    const settlements = greedySettle(netsArray, unit);
+    
+    // コピー用テキスト生成
+    const settlementText = settlements.length > 0
+      ? `清算方法（丸め単位：¥${unit}）
+${settlements.map(s => `${s.from} → ${s.to}：${yen(s.amount)}`).join('\n')}
+（合計受取＝合計支払＝${yen(settlements.reduce((sum, s) => sum + s.amount, 0))}）`
+      : '清算の必要はありません';
+    
+    return {
+      members,
+      nets: netsArray,
+      settlements,
+      settlementText,
+      roundingUnit: unit,
+    };
+  }, [members, expenses, unit, tiltMap]);
 
   const groupKey = params.key as string;
 
@@ -82,8 +137,7 @@ export default function GroupPage() {
         setExpenses(expensesData);
       }
 
-      // 清算サマリー取得
-      await fetchSummary();
+
       
       // グループ履歴を保存
       saveGroupHistory(groupKey, 'グループ', membersData.length);
@@ -95,33 +149,9 @@ export default function GroupPage() {
     }
   };
 
-  const fetchSummary = async (roundingUnit = unit, tiltMode = tiltOn) => {
-    try {
-      setIsUpdating(true);
-      const tiltParam = tiltMode ? '&tilt=rough' : '';
-      const response = await fetch(`/api/groups/${groupKey}/summary?unit=${roundingUnit}${tiltParam}`);
-      if (response.ok) {
-        const data = await response.json();
-        setSummary(data);
-      }
-    } catch (error) {
-      console.error('清算サマリー取得エラー:', error);
-      toast.error('清算サマリーの取得に失敗しました');
-    } finally {
-      setIsUpdating(false);
-    }
-  };
-
   const handleUnitChange = (value: string) => {
     const newUnit = parseInt(value) as 1 | 10 | 100 | 1000;
     setUnit(newUnit);
-    fetchSummary(newUnit, tiltOn);
-  };
-
-  const handleTiltToggle = () => {
-    const newTiltOn = !tiltOn;
-    setTiltOn(newTiltOn);
-    fetchSummary(unit, newTiltOn);
   };
 
   useEffect(() => {
@@ -173,13 +203,10 @@ export default function GroupPage() {
                 <div className="flex justify-between items-center">
                   <CardTitle className="flex items-center gap-2">
                     清算方法
-                    {isUpdating && (
-                      <div className="w-4 h-4 border-2 border-gray-300 border-t-blue-500 rounded-full animate-spin"></div>
-                    )}
                   </CardTitle>
                   {summary && (
                     <div className="flex items-center gap-2">
-                      <Select value={unit.toString()} onValueChange={handleUnitChange} disabled={isUpdating}>
+                      <Select value={unit.toString()} onValueChange={handleUnitChange}>
                         <SelectTrigger className="w-32">
                           <SelectValue />
                         </SelectTrigger>
@@ -230,32 +257,7 @@ export default function GroupPage() {
                   </div>
                 )}
 
-                {/* 傾斜をかけるボタン */}
-                {summary && (
-                  <div className="mt-4 pt-4 border-t">
-                    <div className="flex items-center justify-between">
-                      <Button
-                        onClick={handleTiltToggle}
-                        variant="outline"
-                        disabled={isUpdating}
-                        className="flex-1 mr-2"
-                      >
-                        {tiltOn ? '傾斜を解除' : '傾斜をかける'}
-                      </Button>
-                      {tiltOn && (
-                        <span className="text-xs text-neutral-500 whitespace-nowrap">
-                          傾斜（役職×年齢）適用中
-                        </span>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-500 mt-2">
-                      {tiltOn
-                        ? '役職と年齢をざっくり考慮して再計算しました'
-                        : '通常は全員が等しく負担します'
-                      }
-                    </p>
-                  </div>
-                )}
+
               </CardContent>
             </Card>
           </div>

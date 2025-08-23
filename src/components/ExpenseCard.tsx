@@ -2,7 +2,9 @@
 
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { yen } from '@/lib/format';
+import { useExpenseTiltStore } from '@/stores/expenseTiltStore';
 
 interface ExpenseCardProps {
   expense: {
@@ -16,6 +18,14 @@ interface ExpenseCardProps {
 }
 
 export function ExpenseCard({ expense }: ExpenseCardProps) {
+  const mode = useExpenseTiltStore((s) => s.get(expense.id));
+  const setMode = useExpenseTiltStore((s) => s.set);
+  const tiltOn = mode === "rough";
+
+  const handleTiltToggle = () => {
+    setMode(expense.id, tiltOn ? "equal" : "rough");
+  };
+
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -39,6 +49,24 @@ export function ExpenseCard({ expense }: ExpenseCardProps) {
               ))}
             </div>
           </div>
+          
+          {/* 傾斜トグルボタン */}
+          <div className="pt-2 border-t">
+            <Button
+              onClick={handleTiltToggle}
+              variant="outline"
+              size="sm"
+              className="w-full"
+            >
+              {tiltOn ? '傾斜を解除' : '傾斜をかける'}
+            </Button>
+            {tiltOn && (
+              <p className="text-xs text-neutral-500 mt-1 text-center">
+                傾斜（役職×年齢）適用中
+              </p>
+            )}
+          </div>
+          
           <div className="text-xs text-muted-foreground">
             {new Date(expense.createdAt).toLocaleString('ja-JP')}
           </div>
