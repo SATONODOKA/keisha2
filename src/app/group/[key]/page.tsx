@@ -266,9 +266,22 @@ export default function GroupPage() {
           <h2 className="text-xl font-bold mb-4">立替履歴</h2>
           {expenses.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2">
-              {expenses.map((expense) => (
-                <ExpenseCard key={expense.id} expense={expense} />
-              ))}
+              {expenses.map((expense) => {
+                // membersByIdを作成（各立替カードで清算表示に使用）
+                const membersById = members.reduce((acc, member) => {
+                  acc[member.id] = { id: member.id, name: member.name };
+                  return acc;
+                }, {} as Record<string, { id: string; name: string }>);
+                
+                return (
+                  <ExpenseCard 
+                    key={expense.id} 
+                    expense={expense} 
+                    membersById={membersById}
+                    roundingUnit={unit}
+                  />
+                );
+              })}
             </div>
           ) : (
             <Card>
