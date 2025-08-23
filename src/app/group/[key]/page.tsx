@@ -41,6 +41,7 @@ interface Summary {
   settlements: Settlement[];
   settlementText: string;
   roundingUnit: number;
+  tilt: string;
 }
 
 export default function GroupPage() {
@@ -51,6 +52,7 @@ export default function GroupPage() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [summary, setSummary] = useState<Summary | null>(null);
   const [unit, setUnit] = useState<1 | 10 | 100 | 1000>(1);
+  const [tiltOn, setTiltOn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isUpdating, setIsUpdating] = useState(false);
 
@@ -91,43 +93,43 @@ export default function GroupPage() {
     }
   };
 
-  const fetchSummary = async (roundingUnit = unit) => {
+  const fetchSummary = async (roundingUnit = unit, tiltMode = tiltOn) => {
     try {
       setIsUpdating(true);
-      const response = await fetch(`/api/groups/${groupKey}/summary?unit=${roundingUnit}`);
+      const tiltParam = tiltMode ? '&tilt=role_age' : '';
+      const response = await fetch(`/api/groups/${groupKey}/summary?unit=${roundingUnit}${tiltParam}`);
       if (response.ok) {
         const data = await response.json();
         setSummary(data);
-        // APIレスポンスから正しいunit値を設定
-        setUnit(data.roundingUnit);
       }
     } catch (error) {
-      console.error('サマリー取得エラー:', error);
+      console.error('清算サマリー取得エラー:', error);
+      toast.error('清算サマリーの取得に失敗しました');
     } finally {
       setIsUpdating(false);
     }
   };
 
-  useEffect(() => {
-    if (groupKey) {
-      fetchData();
-    }
-  }, [groupKey]);
-
-  const handleUnitChange = async (value: string) => {
-    const newUnit = Number(value) as 1 | 10 | 100 | 1000;
-    
-    // 即座にUIのunitを更新
+  const handleUnitChange = (value: string) => {
+    const newUnit = parseInt(value) as 1 | 10 | 100 | 1000;
     setUnit(newUnit);
-    
-    // APIから新しいunitで計算されたデータを取得
-    await fetchSummary(newUnit);
+    fetchSummary(newUnit, tiltOn);
   };
+
+  const handleTiltToggle = () => {
+    const newTiltOn = !tiltOn;
+    setTiltOn(newTiltOn);
+    fetchSummary(unit, newTiltOn);
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, []);
 
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">読み込み中...</div>
+        <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
   }
@@ -205,6 +207,33 @@ export default function GroupPage() {
                   </div>
                 ) : (
                   <p className="text-gray-500">清算の必要はありません</p>
+                )}
+
+                {/* 傾斜をかけるボタン */}
+                {summary && (
+                  <div className="mt-4 pt-4 border-t">
+                    <div className="flex items-center justify-between">
+                      <Button
+                        onClick={handleTiltToggle}
+                        variant="outline"
+                        disabled={isUpdating}
+                        className="flex-1 mr-2"
+                      >
+                        {tiltOn ? '傾斜を解除' : '傾斜をかける'}
+                      </Button>
+                      {tiltOn && (
+                        <span className="text-xs text-neutral-500 whitespace-nowrap">
+                          傾斜（役職×年齢）適用中
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 mt-2">
+                      {tiltOn
+                        ? '役職と年齢を考慮した配分で再計算しました'
+                        : '通常は全員が等しく負担します'
+                      }
+                    </p>
+                  </div>
                 )}
               </CardContent>
             </Card>
