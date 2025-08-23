@@ -1,4 +1,4 @@
-interface GroupHistory {
+export interface GroupHistory {
   id: string;
   name: string;
   lastAccessed: number;
@@ -36,17 +36,22 @@ export function saveGroupHistory(groupKey: string, groupName: string, memberCoun
 export function getGroupHistory(): GroupHistory[] {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    return stored ? JSON.parse(stored) : [];
+    if (!stored) return [];
+    
+    const history = JSON.parse(stored);
+    if (!Array.isArray(history)) return [];
+    
+    // データの整合性を確認
+    return history.filter(item => 
+      item && 
+      typeof item === 'object' && 
+      typeof item.id === 'string' && 
+      typeof item.name === 'string' && 
+      typeof item.lastAccessed === 'number' && 
+      typeof item.memberCount === 'number'
+    );
   } catch (error) {
     console.error('グループ履歴の取得に失敗:', error);
     return [];
-  }
-}
-
-export function clearGroupHistory() {
-  try {
-    localStorage.removeItem(STORAGE_KEY);
-  } catch (error) {
-    console.error('グループ履歴の削除に失敗:', error);
   }
 }

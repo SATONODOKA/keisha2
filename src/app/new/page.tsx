@@ -504,7 +504,7 @@ export default function NewGroupPage() {
             <CardContent className="space-y-3">
               {recentGroups.slice(0, 5).map((group) => (
                 <div
-                  key={group.id}
+                  key={group?.id || `group-${index}`}
                   className="flex items-center justify-between p-3 bg-white rounded-lg shadow-sm cursor-pointer hover:bg-gray-100 transition-colors"
                   onClick={() => router.push(`/group/${group.id}`)}
                 >
