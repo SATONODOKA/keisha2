@@ -269,7 +269,12 @@ ${settlements.map(s => `${s.from} → ${s.to}：${yen(s.amount)}`).join('\n')}
           {expenses.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2">
               {expenses.map((expense) => (
-                <ExpenseCard key={expense.id} expense={expense} />
+                <ExpenseCard 
+                  key={expense.id} 
+                  expense={expense} 
+                  members={members}
+                  roundingUnit={unit}
+                />
               ))}
             </div>
           ) : (

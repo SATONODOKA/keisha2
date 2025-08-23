@@ -95,4 +95,46 @@ export function computeGroupTransfers({
   }
 
   return nets;
+}
+
+// 単一立替の清算計算
+export function computeSingleExpenseSettlement({
+  expense,
+  membersById,
+  roundingUnit,
+  tiltMode,
+}: {
+  expense: { amountYen: number; paidById: string; beneficiaries: { memberId: string }[] };
+  membersById: Record<string, { id: string; role?: string; age?: number | null }>;
+  roundingUnit: 1 | 10 | 100 | 1000;
+  tiltMode: "equal" | "rough";
+}) {
+  // 1) 全メンバーの nets を0初期化
+  let nets: Record<string, number> = {};
+  Object.keys(membersById).forEach(id => (nets[id] = 0));
+
+  // 2) 支払者に金額を追加
+  nets[expense.paidById] += expense.amountYen;
+
+  // 3) 受益者に金額を配分
+  const benIds = expense.beneficiaries.map(b => b.memberId);
+  let alloc: Record<string, number>;
+
+  if (tiltMode === "rough") {
+    const benMembers = benIds.map(id => membersById[id]);
+    alloc = allocateByWeightsWithMembers(expense.amountYen, benMembers);
+  } else {
+    alloc = equalAllocate(expense.amountYen, benIds);
+  }
+
+  for (const id of benIds) {
+    nets[id] -= alloc[id];
+  }
+
+  // 4) 丸め（単位を合わせる）
+  if (roundingUnit > 1) {
+    nets = roundNetsToUnit(nets, roundingUnit);
+  }
+
+  return nets;
 } 
